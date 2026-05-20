@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workspace - Task Manager</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="top-header">
+        <div class="logo">Task Master</div>
+        <div class="user-info">
+            <span>Welcome, <b>Pichu</b></span>
+            <button class="btn-outline" onclick="logout()">Sign Out</button>
+        </div>
+    </header>
+
+    <main class="workspace">
+        <div class="stats-container">
+            <div class="stat-card">
+                <h3>All Tasks</h3>
+                <p id="totalTasks">0</p>
+            </div>
+            <div class="stat-card">
+                <h3>Pending</h3>
+                <p id="pendingTasks" style="color: #d48b41;">0</p>
+            </div>
+            <div class="stat-card">
+                <h3>Done</h3>
+                <p id="doneTasks" style="color: #5a8264;">0</p>
+            </div>
+        </div>
+
+        <div class="action-bar">
+            <div class="filters">
+                <select id="filterPriority">
+                    <option value="all">All Priorities</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                </select>
+                <select id="filterStatus">
+                    <option value="all">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="done">Done</option>
+                </select>
+                <input type="date" id="filterDueDate" title="Lọc theo ngày đến hạn">
+            </div>
+            <div class="search-box">
+                <span class="search-icon">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                </span>
+                <input type="text" id="searchTask" placeholder="Search Task...">
+            </div>
+            <button class="btn-primary" onclick="openModal()">+ Add Task</button>
+        </div>
+
+        <div class="task-list-header">
+            <div>Task</div>
+            <div>Priority</div>
+            <div>Due Date</div>
+            <div>Status</div>
+            <div></div> </div>
+        <div id="taskList" class="task-list-container">
+            </div>
+    </main>
+
+    <div id="taskModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Add New Task</h2>
+            <form id="taskForm">
+                <div class="input-group">
+                    <label>Title</label>
+                    <input type="text" id="taskTitle" required>
+                </div>
+                <div class="input-group">
+                    <label>Description</label>
+                    <textarea id="taskDesc" rows="3"></textarea>
+                </div>
+                <div class="flex-row">
+                    <div class="input-group">
+                        <label>Priority</label>
+                        <select id="taskPriority">
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Status</label>
+                        <select id="taskStatus">
+                            <option value="pending">Pending</option>
+                            <option value="done">Done</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label>Due Date</label>
+                    <input type="date" id="taskDueDate" required>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-outline" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Save Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
