@@ -1,189 +1,234 @@
-// MOCK DATA
-let mockTasks = [
-    {
-        taskId: "t1-uuid",
-        userId: "user-1",
-        title: "Hoàn thiện Backend API",
-        description: "Viết 4 hàm Lambda (Get, Create, Update, Delete) cho NodeJS.",
-        priority: "high",
-        dueDate: "2026-05-20",
-        status: "pending",
-        createdAt: "2026-05-18T08:00:00Z"
-    },
-    {
-        taskId: "t2-uuid",
-        userId: "user-1",
-        title: "Cấu hình S3 Private",
-        description: "Bật Block Public Access và gắn OAC cho CloudFront.",
-        priority: "medium",
-        dueDate: "2026-05-22",
-        status: "done",
-        createdAt: "2026-05-17T14:30:00Z"
-    }
-];
+const API_BASE_URL = "http://localhost:3000";
+const LOCAL_USER_ID = "user-1";
 
-// Hàm khởi tạo khi load trang
-document.addEventListener('DOMContentLoaded', () => {
-    // Kiểm tra token (nếu chưa login thì đá về trang login)
-    if (!localStorage.getItem('userToken')) {
+let tasks = [];
+let visibleTasks = [];
+let currentEditTaskId = null;
+
+document.addEventListener("DOMContentLoaded", async () => {
+    if (!localStorage.getItem("userToken")) {
         window.location.href = "login.html";
         return;
     }
-    renderTasks(mockTasks);
-    updateStats();
+
+    bindFilters();
+    await loadTasks();
 });
 
-// Hàm Render HTML ra giao diện
-function renderTasks(tasks) {
-    const container = document.getElementById('taskList');
-    container.innerHTML = ''; // Xóa sạch HTML cũ
+function authHeaders(extraHeaders = {}) {
+    return {
+        "Authorization": `Bearer ${localStorage.getItem("userToken")}`,
+        "X-User-Id": LOCAL_USER_ID,
+        ...extraHeaders
+    };
+}
 
-    tasks.forEach(task => {
-        // KIỂM TRA TRẠNG THÁI: Nếu done thì thêm class 'task-completed', nếu không thì để trống
-        const doneClass = (task.status === 'done') ? 'task-completed' : '';
+async function apiRequest(path, options = {}) {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        headers: authHeaders(options.headers || {})
+    });
 
-        // Tạo chuỗi HTML cho từng Card công việc, chèn thêm class nếu đã hoàn thành
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(data.message || "API request failed.");
+    }
+
+    return data;
+}
+
+async function loadTasks() {
+    try {
+        const data = await apiRequest(`/tasks?userId=${encodeURIComponent(LOCAL_USER_ID)}`);
+        tasks = data.tasks || [];
+        applyFilters();
+    } catch (error) {
+        showError(error.message);
+    }
+}
+
+function bindFilters() {
+    ["filterPriority", "filterStatus", "filterDueDate", "searchTask"].forEach((id) => {
+        document.getElementById(id)?.addEventListener("input", applyFilters);
+    });
+}
+
+function applyFilters() {
+    const priority = document.getElementById("filterPriority")?.value || "all";
+    const status = document.getElementById("filterStatus")?.value || "all";
+    const dueDate = document.getElementById("filterDueDate")?.value || "";
+    const searchTerm = (document.getElementById("searchTask")?.value || "").trim().toLowerCase();
+
+    visibleTasks = tasks.filter((task) => {
+        const matchesPriority = priority === "all" || task.priority === priority;
+        const matchesStatus = status === "all" || task.status === status;
+        const matchesDueDate = !dueDate || task.dueDate === dueDate;
+        const matchesSearch = !searchTerm ||
+            task.title.toLowerCase().includes(searchTerm) ||
+            (task.description || "").toLowerCase().includes(searchTerm);
+
+        return matchesPriority && matchesStatus && matchesDueDate && matchesSearch;
+    });
+
+    renderTasks(visibleTasks);
+    updateStats();
+}
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+function renderTasks(taskList) {
+    const container = document.getElementById("taskList");
+    container.innerHTML = "";
+
+    if (taskList.length === 0) {
+        container.innerHTML = '<div class="task-item"><div class="task-info"><h4>No tasks found</h4><p>Create a task or change your filters.</p></div></div>';
+        return;
+    }
+
+    taskList.forEach((task) => {
+        const doneClass = task.status === "done" ? "task-completed" : "";
         const taskHTML = `
             <div class="task-item ${doneClass}">
                 <div class="task-info">
-                    <h4>${task.title}</h4>
-                    <p>${task.description}</p>
+                    <h4>${escapeHtml(task.title)}</h4>
+                    <p>${escapeHtml(task.description)}</p>
                 </div>
-                <div><span class="badge ${task.priority}">${task.priority}</span></div>
-                <div>${task.dueDate}</div>
-                <div><span class="badge ${task.status}">${task.status}</span></div>
+                <div><span class="badge ${escapeHtml(task.priority)}">${escapeHtml(task.priority)}</span></div>
+                <div>${escapeHtml(task.dueDate)}</div>
+                <div><span class="badge ${escapeHtml(task.status)}">${escapeHtml(task.status)}</span></div>
                 <div class="task-actions dropdown-container">
-                    <button class="btn-dots" onclick="toggleDropdown('${task.taskId}', event)">...</button>
-                    <div id="dropdown-${task.taskId}" class="dropdown-menu">
-                        <button onclick="editTask('${task.taskId}')">Chỉnh sửa</button>
-                        <button class="delete-btn" onclick="deleteTask('${task.taskId}')">Delete</button>
+                    <button class="btn-dots" onclick="toggleDropdown('${escapeHtml(task.taskId)}', event)">...</button>
+                    <div id="dropdown-${escapeHtml(task.taskId)}" class="dropdown-menu">
+                        <button onclick="editTask('${escapeHtml(task.taskId)}')">Chinh sua</button>
+                        <button class="delete-btn" onclick="deleteTask('${escapeHtml(task.taskId)}')">Delete</button>
                     </div>
                 </div>
             </div>
         `;
-        // Gắn vào giao diện
-        container.insertAdjacentHTML('beforeend', taskHTML);
+
+        container.insertAdjacentHTML("beforeend", taskHTML);
     });
 }
 
-// Cập nhật con số trên Dashboard
 function updateStats() {
-    document.getElementById('totalTasks').innerText = mockTasks.length;
-    document.getElementById('pendingTasks').innerText = mockTasks.filter(t => t.status === 'pending').length;
-    document.getElementById('doneTasks').innerText = mockTasks.filter(t => t.status === 'done').length;
+    document.getElementById("totalTasks").innerText = tasks.length;
+    document.getElementById("pendingTasks").innerText = tasks.filter((task) => task.status === "pending").length;
+    document.getElementById("doneTasks").innerText = tasks.filter((task) => task.status === "done").length;
 }
 
-// ================= MODAL & FORM LOGIC =================
+function showError(message) {
+    alert(message);
+}
+
+function logout() {
+    localStorage.removeItem("userToken");
+    window.location.href = "login.html";
+}
+
 function openModal() {
-    currentEditTaskId = null; // Đặt lại cờ hiệu là null (Chế độ Thêm mới)
-    document.getElementById('modalTitle').innerText = 'Thêm công việc mới'; // Trả lại tiêu đề gốc
-    document.getElementById('taskForm').reset(); // Xóa sạch dữ liệu trong form
-    document.getElementById('taskModal').style.display = 'flex';
+    currentEditTaskId = null;
+    document.getElementById("modalTitle").innerText = "Them cong viec moi";
+    document.getElementById("taskForm").reset();
+    document.getElementById("taskModal").style.display = "flex";
 }
 
 function closeModal() {
-    document.getElementById('taskModal').style.display = 'none';
+    document.getElementById("taskModal").style.display = "none";
 }
 
-// Bắt sự kiện Submit Form (Tạo mới)
-// Bắt sự kiện Submit Form (Dùng chung cho cả Tạo mới và Sửa)
-document.getElementById('taskForm').addEventListener('submit', function(e) {
+document.getElementById("taskForm").addEventListener("submit", async function(e) {
     e.preventDefault();
-    
-    if (currentEditTaskId) {
-        // TRẠNG THÁI 1: ĐANG SỬA (UPDATE)
-        const taskIndex = mockTasks.findIndex(t => t.taskId === currentEditTaskId);
-        if (taskIndex !== -1) {
-            // Cập nhật lại dữ liệu mới từ form vào mảng
-            mockTasks[taskIndex].title = document.getElementById('taskTitle').value;
-            mockTasks[taskIndex].description = document.getElementById('taskDesc').value;
-            mockTasks[taskIndex].priority = document.getElementById('taskPriority').value;
-            mockTasks[taskIndex].status = document.getElementById('taskStatus').value;
-            mockTasks[taskIndex].dueDate = document.getElementById('taskDueDate').value;
-        }
-    } else {
-        // TRẠNG THÁI 2: THÊM MỚI (CREATE)
-        const newTask = {
-            taskId: "t-" + Date.now(), // Tạo ID giả
-            userId: "user-1",
-            title: document.getElementById('taskTitle').value,
-            description: document.getElementById('taskDesc').value,
-            priority: document.getElementById('taskPriority').value,
-            status: document.getElementById('taskStatus').value,
-            dueDate: document.getElementById('taskDueDate').value,
-            createdAt: new Date().toISOString()
-        };
-        // Đẩy công việc mới vào cuối mảng
-        mockTasks.push(newTask);
-    }
 
-    // Sau khi xử lý xong (dù thêm hay sửa) thì vẽ lại giao diện
-    renderTasks(mockTasks);
-    updateStats();
-    closeModal();
+    const payload = {
+        title: document.getElementById("taskTitle").value,
+        description: document.getElementById("taskDesc").value,
+        priority: document.getElementById("taskPriority").value,
+        status: document.getElementById("taskStatus").value,
+        dueDate: document.getElementById("taskDueDate").value
+    };
+
+    try {
+        if (currentEditTaskId) {
+            const data = await apiRequest(`/tasks/${encodeURIComponent(currentEditTaskId)}?userId=${encodeURIComponent(LOCAL_USER_ID)}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            tasks = tasks.map((task) => task.taskId === currentEditTaskId ? data.task : task);
+        } else {
+            const data = await apiRequest(`/tasks?userId=${encodeURIComponent(LOCAL_USER_ID)}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            tasks.unshift(data.task);
+        }
+
+        applyFilters();
+        closeModal();
+    } catch (error) {
+        showError(error.message);
+    }
 });
 
-// Hàm Bật/Tắt Dropdown
 function toggleDropdown(taskId, event) {
-    event.stopPropagation(); // Ngăn sự kiện click lan ra ngoài
-    
-    // Đóng tất cả các menu đang mở khác trước khi mở menu mới
-    document.querySelectorAll('.dropdown-menu').forEach(menu => {
+    event.stopPropagation();
+
+    document.querySelectorAll(".dropdown-menu").forEach((menu) => {
         if (menu.id !== `dropdown-${taskId}`) {
-            menu.classList.remove('show');
+            menu.classList.remove("show");
         }
     });
 
-    // Mở menu của task hiện tại
-    const dropdown = document.getElementById(`dropdown-${taskId}`);
-    dropdown.classList.toggle('show');
+    document.getElementById(`dropdown-${taskId}`)?.classList.toggle("show");
 }
 
-// Bắt sự kiện click ra ngoài để tự động đóng menu
 window.onclick = function(event) {
-    if (!event.target.matches('.btn-dots')) {
-        document.querySelectorAll('.dropdown-menu').forEach(menu => {
-            if (menu.classList.contains('show')) {
-                menu.classList.remove('show');
-            }
+    if (!event.target.matches(".btn-dots")) {
+        document.querySelectorAll(".dropdown-menu").forEach((menu) => {
+            menu.classList.remove("show");
         });
     }
-}
+};
 
-// Hàm Xóa công việc giả lập
-function deleteTask(taskId) {
-    // Hỏi xác nhận trước khi xóa
-    if(confirm('Are you sure you want to delete this job?')) {
-        // Lọc bỏ task có ID tương ứng ra khỏi mảng mockTasks
-        mockTasks = mockTasks.filter(t => t.taskId !== taskId);
-        
-        // Vẽ lại giao diện và cập nhật số liệu
-        renderTasks(mockTasks);
-        updateStats();
+async function deleteTask(taskId) {
+    if (!confirm("Are you sure you want to delete this job?")) {
+        return;
+    }
+
+    try {
+        await apiRequest(`/tasks/${encodeURIComponent(taskId)}?userId=${encodeURIComponent(LOCAL_USER_ID)}`, {
+            method: "DELETE"
+        });
+
+        tasks = tasks.filter((task) => task.taskId !== taskId);
+        applyFilters();
+    } catch (error) {
+        showError(error.message);
     }
 }
 
-// Biến toàn cục để theo dõi xem người dùng đang sửa Task nào.
-// Nếu là null, nghĩa là đang ở chế độ "Thêm mới".
-let currentEditTaskId = null; 
-
-// Hàm xử lý khi Chỉnh sửa
 function editTask(taskId) {
-    // 1. Tìm công việc cần sửa trong mockTasks
-    const taskToEdit = mockTasks.find(t => t.taskId === taskId);
-    if (!taskToEdit) return;
+    const taskToEdit = tasks.find((task) => task.taskId === taskId);
+    if (!taskToEdit) {
+        return;
+    }
 
-    // 2. Bật cờ hiệu ghi nhớ ID của công việc đang sửa
     currentEditTaskId = taskId;
-
-    // 3. Đổ dữ liệu cũ vào các ô nhập liệu của Form
-    document.getElementById('taskTitle').value = taskToEdit.title;
-    document.getElementById('taskDesc').value = taskToEdit.description;
-    document.getElementById('taskPriority').value = taskToEdit.priority;
-    document.getElementById('taskStatus').value = taskToEdit.status;
-    document.getElementById('taskDueDate').value = taskToEdit.dueDate;
-
-    // 4. Đổi tiêu đề Popup cho phù hợp và hiển thị nó lên
-    document.getElementById('modalTitle').innerText = 'Chỉnh sửa công việc';
-    document.getElementById('taskModal').style.display = 'flex';
+    document.getElementById("taskTitle").value = taskToEdit.title;
+    document.getElementById("taskDesc").value = taskToEdit.description || "";
+    document.getElementById("taskPriority").value = taskToEdit.priority;
+    document.getElementById("taskStatus").value = taskToEdit.status;
+    document.getElementById("taskDueDate").value = taskToEdit.dueDate;
+    document.getElementById("modalTitle").innerText = "Chinh sua cong viec";
+    document.getElementById("taskModal").style.display = "flex";
 }
