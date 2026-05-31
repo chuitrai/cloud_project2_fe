@@ -1,7 +1,20 @@
 const API_BASE_URL = "https://m06euxthy1.execute-api.us-east-1.amazonaws.com/prod";
 const COGNITO_USER_POOL_ID = "us-east-1_zuo5aJas6";
 const COGNITO_CLIENT_ID = "4d09kp0ug5r43e56lp671rcd8v";
-const LOCAL_USER_ID = "user-1";
+
+// Hàm giải mã JWT token để lấy userId
+function getUserIdFromToken() {
+    const token = localStorage.getItem("userToken");
+    if (!token) return null;
+    
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload.sub || payload.email || null;
+    } catch (e) {
+        console.error("Không thể giải mã token:", e);
+        return null;
+    }
+}
 
 const dueDateInput = document.getElementById('taskDueDate');
 if (dueDateInput) {
@@ -35,9 +48,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 function authHeaders(extraHeaders = {}) {
+    const token = localStorage.getItem("userToken");
     return {
-        "Authorization": `Bearer ${localStorage.getItem("userToken")}`,
-        "X-User-Id": LOCAL_USER_ID,
+        "Authorization": token ? `Bearer ${token}` : "",
+        "Content-Type": "application/json",
         ...extraHeaders
     };
 }
@@ -58,7 +72,7 @@ async function apiRequest(path, options = {}) {
 
 async function loadTasks() {
     try {
-        const data = await apiRequest(`/tasks?userId=${encodeURIComponent(LOCAL_USER_ID)}`);
+        const data = await apiRequest("/tasks");
         tasks = data.tasks || [];
         applyFilters();
     } catch (error) {
@@ -192,7 +206,7 @@ document.getElementById("taskForm").addEventListener("submit", async function(e)
 
     try {
         if (currentEditTaskId) {
-            const data = await apiRequest(`/tasks/${encodeURIComponent(currentEditTaskId)}?userId=${encodeURIComponent(LOCAL_USER_ID)}`, {
+            const data = await apiRequest(`/tasks/${encodeURIComponent(currentEditTaskId)}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
@@ -200,7 +214,7 @@ document.getElementById("taskForm").addEventListener("submit", async function(e)
 
             tasks = tasks.map((task) => task.taskId === currentEditTaskId ? data.task : task);
         } else {
-            const data = await apiRequest(`/tasks?userId=${encodeURIComponent(LOCAL_USER_ID)}`, {
+            const data = await apiRequest(`/tasks`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
@@ -242,7 +256,7 @@ async function deleteTask(taskId) {
     }
 
     try {
-        await apiRequest(`/tasks/${encodeURIComponent(taskId)}?userId=${encodeURIComponent(LOCAL_USER_ID)}`, {
+        await apiRequest(`/tasks/${encodeURIComponent(taskId)}`, {
             method: "DELETE"
         });
 

@@ -1,4 +1,15 @@
-// ================= HÀM HỖ TRỢ HIỂN THỊ LỖI & KIỂM TRA EMAIL =================
+// ================= COGNITO CONFIGURATION =================
+Amplify.configure({
+    Auth: {
+        Cognito: {
+            userPoolId: COGNITO_USER_POOL_ID,
+            userPoolClientId: COGNITO_CLIENT_ID,
+            region: "us-east-1"
+        }
+    }
+});
+
+// ================= HELPER FUNCTIONS =================
 function showError(elementId, message) {
     const errorDiv = document.getElementById(elementId);
     errorDiv.innerText = message;
@@ -9,7 +20,6 @@ function hideError(elementId) {
     document.getElementById(elementId).style.display = 'none';
 }
 
-// Hàm kiểm tra định dạng Email chuẩn chung
 function isValidEmail(email) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
@@ -35,7 +45,7 @@ document.getElementById('showSignIn').addEventListener('click', function(e) {
     signInContainer.style.display = 'block';
 });
 
-// ================= LOGIC ĐĂNG KÝ (VALIDATION + API) =================
+// ================= SIGN UP FORM (COGNITO) =================
 document.getElementById('signUpForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
     hideError('signUpError'); 
@@ -44,158 +54,92 @@ document.getElementById('signUpForm')?.addEventListener('submit', async function
     const password = document.getElementById('reg-password').value.trim();
     const confirm = document.getElementById('reg-confirm').value.trim();
 
-    // 1. Kiểm tra bỏ trống
+    // Validation
     if (!email || !password || !confirm) {
         showError('signUpError', "Please enter complete information!");
         return;
     }
-    // 2. Kiểm tra ĐÚNG định dạng Email 
     if (!isValidEmail(email)) {
         showError('signUpError', "Invalid email format!");
         return;
     }
-    // 3. Kiểm tra độ dài mật khẩu
     if (password.length < 8) {
         showError('signUpError', "Password must be at least 8 characters long!");
         return;
     }
-    // 4. Kiểm tra khớp mật khẩu
     if (password !== confirm) {
         showError('signUpError', "Confirm password does not match!");
         return;
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}/signup`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email, password: password })
+        const { userId, nextStep } = await Amplify.Auth.signUp({
+            username: email,
+            password: password,
+            options: {
+                userAttributes: {
+                    email: email
+                }
+            }
         });
 
-        const data = await response.json();
-
-        if (response.ok) {
-            alert("🎉 Registration successful! Please proceed to login.");
-            document.getElementById('showSignIn').click(); 
-        } else {
-            showError('signUpError', "Server Error: " + data.error);
-        }
+        alert("🎉 Registration successful! Please check your email to confirm your account.");
+        document.getElementById('showSignIn').click(); 
     } catch (error) {
-        showError('signUpError', "Unable to connect to the server. Please check the Backend.");
+        showError('signUpError', error.message || "Sign up failed. Please try again.");
     }
 });
 
-// ================= LOGIC ĐĂNG NHẬP (VALIDATION + MOCK) =================
-document.getElementById('authForm')?.addEventListener('submit', function(e) {
+// ================= SIGN IN FORM (COGNITO) =================
+document.getElementById('authForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
     hideError('signInError'); 
 
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value.trim();
 
-    // 1. Kiểm tra bỏ trống
+    // Validation
     if (!email || !password) {
         showError('signInError', "Please enter both Email and Password!");
         return;
     }
-    // 2. Kiểm tra ĐÚNG định dạng Email
     if (!isValidEmail(email)) {
         showError('signInError', "Invalid email format!");
         return;
     }
-    // 3. Kiểm tra độ dài mật khẩu
     if (password.length < 8) {
         showError('signInError', "Password must be at least 8 characters long!");
         return;
     }
 
-    localStorage.setItem('userToken', 'local-token'); 
-    window.location.href = "index.html";
+    try {
+        const { isSignedIn, nextStep } = await Amplify.Auth.signIn({ 
+            username: email, 
+            password: password 
+        });
+
+        if (isSignedIn) {
+            const session = await Amplify.Auth.fetchAuthSession();
+            const idToken = session?.tokens?.idToken?.toString();
+            localStorage.setItem('userToken', idToken || 'cognito-token');
+            window.location.href = "index.html";
+        } else {
+            showError('signInError', "Sign in failed. Please try again.");
+        }
+    } catch (error) {
+        showError('signInError', error.message || "Sign in failed. Invalid credentials or user not confirmed.");
+    }
 });
 
 function logout() {
-    localStorage.removeItem('userToken');
-    window.location.href = "login.html";
+    Amplify.Auth.signOut().then(() => {
+        localStorage.removeItem('userToken');
+        window.location.href = "login.html";
+    }).catch(err => {
+        localStorage.removeItem('userToken');
+        window.location.href = "login.html";
+    });
 }
 
-// // ================= LOGIC CHUYỂN ĐỔI FORM (UI) =================
-// const signInContainer = document.getElementById('signInContainer');
-// const signUpContainer = document.getElementById('signUpContainer');
-
-// document.getElementById('showSignUp').addEventListener('click', function(e) {
-//     e.preventDefault();
-//     // Hiệu ứng mờ dần Form Đăng nhập và hiện Form Đăng ký
-//     signInContainer.style.display = 'none';
-//     signUpContainer.style.display = 'block';
-// });
-
-// document.getElementById('showSignIn').addEventListener('click', function(e) {
-//     e.preventDefault();
-//     signUpContainer.style.display = 'none';
-//     signInContainer.style.display = 'block';
-// });
-
-// // ================= LOGIC ĐĂNG KÝ (Gọi API Backend) =================
-// document.getElementById('signUpForm')?.addEventListener('submit', async function(e) {
-//     e.preventDefault();
-    
-//     const email = document.getElementById('reg-email').value;
-//     const password = document.getElementById('reg-password').value;
-//     const confirm = document.getElementById('reg-confirm').value;
-
-//     if (password !== confirm) {
-//         alert("Mật khẩu xác nhận không khớp!");
-//         return;
-//     }
-
-//     try {
-//         const response = await fetch('http://localhost:3000/signup', {
-//             method: 'POST',
-//             headers: { 'Content-Type': 'application/json' },
-//             body: JSON.stringify({ email: email, password: password })
-//         });
-
-//         const data = await response.json();
-
-//         if (response.ok) {
-//             alert("Đăng ký thành công! Hãy tiến hành đăng nhập.");
-//             document.getElementById('showSignIn').click();
-//         } else {
-//             alert("Lỗi: " + data.error);
-//         }
-//     } catch (error) {
-//         alert("Không thể kết nối đến server Backend.");
-//     }
-// });
-
-// // ================= LOGIC ĐĂNG NHẬP GIẢ LẬP =================
-// document.getElementById('authForm')?.addEventListener('submit', function(e) {
-//     e.preventDefault();
-//     localStorage.setItem('userToken', 'local-token'); 
-//     window.location.href = "index.html";
-// });
-
-// function logout() {
-//     localStorage.removeItem('userToken');
-//     window.location.href = "login.html";
-// }
-
-
-
-// document.getElementById('authForm')?.addEventListener('submit', function(e) {
-//     e.preventDefault(); // Prevent the page from reloading.
-    
-//     // MOCK DATA: This simulates a Cognito token for local development.
-//     const fakeToken = "eyJhbGciOiJIUzI1NiIsInR5c..."; 
-//     localStorage.setItem('userToken', fakeToken);
-    
-//     // Redirect to the workspace.
-//     window.location.href = "index.html";
-// });
-
-// function logout() {
-//     localStorage.removeItem('userToken');
-//     window.location.href = "login.html";
-// }
 
 

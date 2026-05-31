@@ -10,12 +10,29 @@ function getHeader(headers, name) {
 }
 
 function getCurrentUserId(event) {
-  return (
-    event?.queryStringParameters?.userId ||
-    getHeader(event?.headers, "x-user-id") ||
-    event?.requestContext?.authorizer?.claims?.sub ||
-    config.localUserId
-  );
+  // Ưu tiên 1: Lấy từ Cognito authorizer (API Gateway + Cognito authorizer)
+  if (event?.requestContext?.authorizer?.claims?.sub) {
+    return event.requestContext.authorizer.claims.sub;
+  }
+  
+  // Fallback: Lấy từ email claim nếu sub không có
+  if (event?.requestContext?.authorizer?.claims?.email) {
+    return event.requestContext.authorizer.claims.email;
+  }
+
+  // Ưu tiên 2: Lấy từ query parameter (test local)
+  if (event?.queryStringParameters?.userId) {
+    return event.queryStringParameters.userId;
+  }
+
+  // Ưu tiên 3: Lấy từ header X-User-Id (test local)
+  const userId = getHeader(event?.headers, "x-user-id");
+  if (userId) {
+    return userId;
+  }
+
+  // Fallback: Dùng config default
+  return config.localUserId;
 }
 
 module.exports = { getCurrentUserId };
