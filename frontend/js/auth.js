@@ -1,14 +1,16 @@
+// ================= COGNITO CONFIGURATION =================
 const COGNITO_USER_POOL_ID = "us-east-1_zuo5aJas6";
 const COGNITO_CLIENT_ID = "4d09kp0ug5r43e56lp671rcd8v";
 
-// ================= COGNITO CONFIGURATION =================
+// 1. Kéo thư viện từ link CDN HTML
+const { Auth, Amplify } = window.aws_amplify;
+
+// 2. Cấu hình đúng chuẩn V5 
 Amplify.configure({
     Auth: {
-        Cognito: {
-            userPoolId: COGNITO_USER_POOL_ID,
-            userPoolClientId: COGNITO_CLIENT_ID,
-            region: "us-east-1"
-        }
+        region: "us-east-1",
+        userPoolId: COGNITO_USER_POOL_ID,
+        userPoolWebClientId: COGNITO_CLIENT_ID // Phải là userPoolWebClientId
     }
 });
 
@@ -57,7 +59,6 @@ document.getElementById('signUpForm')?.addEventListener('submit', async function
     const password = document.getElementById('reg-password').value.trim();
     const confirm = document.getElementById('reg-confirm').value.trim();
 
-    // Validation
     if (!email || !password || !confirm) {
         showError('signUpError', "Please enter complete information!");
         return;
@@ -76,13 +77,12 @@ document.getElementById('signUpForm')?.addEventListener('submit', async function
     }
 
     try {
-        const { userId, nextStep } = await Amplify.Auth.signUp({
+        // Cú pháp V5 chuẩn để Đăng ký
+        await Auth.signUp({
             username: email,
             password: password,
-            options: {
-                userAttributes: {
-                    email: email
-                }
+            attributes: {
+                email: email
             }
         });
 
@@ -101,7 +101,6 @@ document.getElementById('authForm')?.addEventListener('submit', async function(e
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value.trim();
 
-    // Validation
     if (!email || !password) {
         showError('signInError', "Please enter both Email and Password!");
         return;
@@ -110,32 +109,28 @@ document.getElementById('authForm')?.addEventListener('submit', async function(e
         showError('signInError', "Invalid email format!");
         return;
     }
-    if (password.length < 8) {
-        showError('signInError', "Password must be at least 8 characters long!");
-        return;
-    }
 
     try {
-        const { isSignedIn, nextStep } = await Amplify.Auth.signIn({ 
-            username: email, 
-            password: password 
-        });
+        // Cú pháp V5 chuẩn để Đăng nhập
+        await Auth.signIn(email, password);
 
-        if (isSignedIn) {
-            const session = await Amplify.Auth.fetchAuthSession();
-            const idToken = session?.tokens?.idToken?.toString();
-            localStorage.setItem('userToken', idToken || 'cognito-token');
-            window.location.href = "index.html";
-        } else {
-            showError('signInError', "Sign in failed. Please try again.");
-        }
+        // Lấy token trong V5 (khác hoàn toàn V6)
+        const session = await Auth.currentSession();
+        const idToken = session.getIdToken().getJwtToken();
+
+        // Lưu vào kho để file app.js lấy ra dùng
+        localStorage.setItem('userToken', idToken);
+        
+        // Nhảy sang trang chủ
+        window.location.href = "index.html";
+        
     } catch (error) {
         showError('signInError', error.message || "Sign in failed. Invalid credentials or user not confirmed.");
     }
 });
 
 function logout() {
-    Amplify.Auth.signOut().then(() => {
+    Auth.signOut().then(() => {
         localStorage.removeItem('userToken');
         window.location.href = "login.html";
     }).catch(err => {
@@ -143,6 +138,3 @@ function logout() {
         window.location.href = "login.html";
     });
 }
-
-
-
