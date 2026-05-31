@@ -1,4 +1,6 @@
-const API_BASE_URL = "http://localhost:3000";
+const API_BASE_URL = "https://m06euxthy1.execute-api.us-east-1.amazonaws.com/prod";
+const COGNITO_USER_POOL_ID = "us-east-1_zuo5aJas6";
+const COGNITO_CLIENT_ID = "4d09kp0ug5r43e56lp671rcd8v";
 const LOCAL_USER_ID = "user-1";
 
 const dueDateInput = document.getElementById('taskDueDate');
