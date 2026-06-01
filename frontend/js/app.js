@@ -2,17 +2,31 @@ const API_BASE_URL = "https://m06euxthy1.execute-api.us-east-1.amazonaws.com/pro
 const COGNITO_USER_POOL_ID = "us-east-1_zuo5aJas6";
 const COGNITO_CLIENT_ID = "4d09kp0ug5r43e56lp671rcd8v";
 
-// Hàm giải mã JWT token để lấy userId
-function getUserIdFromToken() {
+// Hàm giải mã JWT token để lấy thông tin người dùng
+function getUserInfoFromToken() {
     const token = localStorage.getItem("userToken");
     if (!token) return null;
-    
+
     try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        return payload.sub || payload.email || null;
+        const displayName = payload.email || payload['cognito:username'] || payload.name || payload.sub || 'User';
+        return {
+            userId: payload.sub || payload.email || payload['cognito:username'] || null,
+            email: payload.email || null,
+            username: payload['cognito:username'] || null,
+            displayName
+        };
     } catch (e) {
         console.error("Không thể giải mã token:", e);
         return null;
+    }
+}
+
+function displayLoggedInUser() {
+    const userInfo = getUserInfoFromToken();
+    const userNameEl = document.getElementById('userName');
+    if (userNameEl) {
+        userNameEl.innerText = userInfo?.displayName || 'User';
     }
 }
 
@@ -43,6 +57,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
 
+    displayLoggedInUser();
     bindFilters();
     await loadTasks();
 });
