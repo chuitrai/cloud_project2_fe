@@ -614,3 +614,17 @@ textarea:focus-visible {
     text-align: center;
     box-shadow: 0 4px 6px rgba(220, 38, 38, 0.05);
 }
+
+.task-item {
+    position: relative;
+    z-index: 1;
+}
+
+.task-item:hover,
+.task-item:focus-within {
+    z-index: 50;
+}
+
+.dropdown-menu {
+    z-index: 100;
+}
